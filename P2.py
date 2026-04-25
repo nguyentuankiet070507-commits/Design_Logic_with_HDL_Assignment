@@ -8,9 +8,6 @@ Mô tả:
       Bài 2: Khối lượng hành tinh (mật độ thay đổi theo khoảng cách từ tâm)
       Bài 3: Xác suất đạt chuẩn robot hàn (phân bố Gaussian 2D)
       Bài 4: Mô-men quán tính bánh đà xi lanh (Vật lý kỹ thuật)
-    - Giao diện tab chuyên nghiệp, biểu đồ nhúng trực tiếp.
-    - Phần giải thích toán học đã được viết CHI TIẾT theo phương pháp ĐỔI BIẾN.
-    - Dễ mở rộng: chỉ cần thêm compute_ + create_plot_ + explanation.
 
 Mục tiêu dự án:
 - Áp dụng tích phân bội vào bài toán thực tế (xây dựng, thiên văn, robot, cơ khí).
@@ -79,7 +76,7 @@ def compute_bai3():
     )
     xac_suat = integral / np.pi
     chinh_xac = 1 - np.exp(-1)
-    return xac_suat, loi, chinh_xac            # ket_qua = xác suất
+    return xac_suat, loi, chinh_xac           
 
 
 def compute_bai4():
@@ -192,7 +189,6 @@ def create_plot_bai3():   # Gaussian 3D - Gradient theo hàm
     
     surf = ax.plot_surface(X, Y, Z, alpha=0.85, cmap='viridis')
     
-    # SỬA Ở ĐÂY: thêm pad=0.2 để colorbar cách ra bên phải
     fig.colorbar(surf, ax=ax, shrink=0.6, pad=0.2, 
                  label=r"$f(x,y)=e^{-(x^2+y^2)}$")
     
