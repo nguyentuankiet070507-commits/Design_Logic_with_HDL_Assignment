@@ -7,7 +7,7 @@ module program_counter #(parameter WIDTH = 32) (
 );
     always @(posedge clk) begin 
 		if (rst) pc_out <= 0;
-		else if (load) data_in <= load;
+		else if (load) pc_out <= data_in;
 		else if (inc) pc_out <= pc_out + 1;
 	end
 endmodule

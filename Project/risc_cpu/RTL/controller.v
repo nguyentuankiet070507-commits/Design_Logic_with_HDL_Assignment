@@ -43,11 +43,10 @@ module controller (
                               halt   = (opcode == HLT);
                               inc_pc = (opcode == SKZ) & is_zero;
                         end
-            OP_FETCH:   begin rd = alu_op; end
+            OP_FETCH:   rd = alu_op; 
             ALU_OP:     begin
                               rd     = alu_op;
                               ld_pc  = (opcode == JMP);
-                              wr     = (opcode == STO);
                               data_e = (opcode == STO);
                         end
             STORE:      begin
