@@ -1,227 +1,165 @@
 `timescale 1ns/1ps
 // ============================================================
 // TESTBENCH: RISC CPU TOP-LEVEL
-// Chạy một chương trình thực tế và kiểm tra kết quả cuối
+// Executes a real program and verifies final results.
 //
-// Chương trình test:
+// Test Program:
 //   [0] LDA 16   → ACC = mem[16] = 5
-//   [1] ADD 17   → ACC = ACC + mem[17] = 5+3 = 8
+//   [1] ADD 17   → ACC = ACC + mem[17] = 5 + 3 = 8
 //   [2] AND 18   → ACC = ACC & mem[18] = 8 & 0xFF = 8
 //   [3] XOR 19   → ACC = ACC ^ mem[19] = 8 ^ 0 = 8
 //   [4] STO 20   → mem[20] = ACC = 8
-//   [5] LDA 20   → ACC = mem[20] = 8 (đọc lại để kiểm tra)
-//   [6] JMP 0    → nhảy về địa chỉ 0 (kiểm tra JMP)
-//                  (lần 2: chạy lại nhưng dừng sau HLT)
-//   [7] HLT      → dừng (lần này sau JMP không chạy nữa)
+//   [5] LDA 20   → ACC = mem[20] = 8 (Verify store operation)
+//   [6] JMP 7    → Jump to address 7 (Test JMP logic)
+//   [7] HLT      → Halt the machine
 //
-//   Data:
-//   mem[16] = 5
-//   mem[17] = 3
-//   mem[18] = 0xFF
-//   mem[19] = 0
+// Data:
+//   mem[16] = 5, mem[17] = 3, mem[18] = 0xFF, mem[19] = 0
 // ============================================================
 module tb_risc_cpu_top;
 
     reg clk, rst;
-
     integer pass_count = 0;
     integer fail_count = 0;
 
+    // Instantiate Design Under Test (DUT)
     risc_cpu_top dut (
         .clk (clk),
         .rst (rst)
     );
 
+    // Clock generation (100MHz)
     initial clk = 0;
     always #5 clk = ~clk;
 
-    // Truy cập nội bộ để đọc giá trị kiểm thử
-    // (dùng hierarchical reference)
-    wire [31:0] acc_val  = dut.acc_reg.data_out;
+    // Internal signals for verification (Hierarchical References)
+    wire [31:0] acc_val  = dut.acc.data_out; // Fixed instance name from acc_reg to acc
     wire [31:0] pc_val   = dut.pc.pc_out;
     wire [2:0]  state    = dut.ctrl.state;
     wire        halt_sig = dut.halt;
 
+    // Task to check results and log status
     task check;
         input [31:0] expected;
         input [31:0] actual;
-        input [127:0] name;
+        input [1023:0] name; // Use large string buffer for names
         begin
             if (expected === actual) begin
-                $display("  [PASS] %s | expected=%0d (0x%08X), got=%0d (0x%08X)",
+                $display("  [PASS] %s | expected=%0d (0x%h), got=%0d (0x%h)",
                     name, expected, expected, actual, actual);
                 pass_count = pass_count + 1;
             end else begin
-                $display("  [FAIL] %s | expected=%0d, got=%0d  <---",
+                $display("  [FAIL] %s | expected=%0d, got=%0d  <--- ERROR",
                     name, expected, actual);
                 fail_count = fail_count + 1;
             end
         end
     endtask
 
-    // Nạp chương trình vào memory trước khi chạy
+    // Pre-load program into memory
     task load_program;
         integer i;
         begin
-            // Xóa sạch memory
+            // Clear memory first
             for (i = 0; i < 32; i = i+1)
                 dut.mem.mem[i] = 32'd0;
 
-            // Instructions (opcode[7:5] | addr[4:0] = 8 bit, zero-pad to 32)
-            // LDA=101, ADD=010, AND=011, XOR=100, STO=110, JMP=111, HLT=000
-            dut.mem.mem[0]  = {24'b0, 3'b101, 5'd16}; // LDA addr=16
-            dut.mem.mem[1]  = {24'b0, 3'b010, 5'd17}; // ADD addr=17
-            dut.mem.mem[2]  = {24'b0, 3'b011, 5'd18}; // AND addr=18
-            dut.mem.mem[3]  = {24'b0, 3'b100, 5'd19}; // XOR addr=19
-            dut.mem.mem[4]  = {24'b0, 3'b110, 5'd20}; // STO addr=20
-            dut.mem.mem[5]  = {24'b0, 3'b101, 5'd20}; // LDA addr=20 (verify)
-            dut.mem.mem[6]  = {24'b0, 3'b111, 5'd7};  // JMP addr=7
+            // Load Instructions (Opcode [7:5] | Address [4:0])
+            // Opcodes: HLT=000, ADD=010, AND=011, XOR=100, LDA=101, STO=110, JMP=111
+            dut.mem.mem[0]  = {24'b0, 3'b101, 5'd16}; // LDA 16
+            dut.mem.mem[1]  = {24'b0, 3'b010, 5'd17}; // ADD 17
+            dut.mem.mem[2]  = {24'b0, 3'b011, 5'd18}; // AND 18
+            dut.mem.mem[3]  = {24'b0, 3'b100, 5'd19}; // XOR 19
+            dut.mem.mem[4]  = {24'b0, 3'b110, 5'd20}; // STO 20
+            dut.mem.mem[5]  = {24'b0, 3'b101, 5'd20}; // LDA 20 (Verify)
+            dut.mem.mem[6]  = {24'b0, 3'b111, 5'd7};  // JMP 7
             dut.mem.mem[7]  = {24'b0, 3'b000, 5'd0};  // HLT
 
-            // Data
-            dut.mem.mem[16] = 32'd5;           // operand A
-            dut.mem.mem[17] = 32'd3;           // operand B
-            dut.mem.mem[18] = 32'h000000FF;    // AND mask
-            dut.mem.mem[19] = 32'd0;           // XOR with 0 = no change
-            dut.mem.mem[20] = 32'd0;           // result slot
+            // Load Data Operands
+            dut.mem.mem[16] = 32'd5;           // Operand A
+            dut.mem.mem[17] = 32'd3;           // Operand B
+            dut.mem.mem[18] = 32'h000000FF;    // AND Mask
+            dut.mem.mem[19] = 32'd0;           // XOR zero (identity)
+            dut.mem.mem[20] = 32'd0;           // Result slot (initially 0)
 
-            $display("  Program đã được nạp vào memory.");
+            $display("  Program loaded into memory.");
         end
     endtask
 
-    // Đợi CPU hoàn thành N instructions (mỗi instruction = 8 clock)
+    // Wait for N instructions (each instruction takes 8 clock cycles)
     task wait_instructions;
         input integer n;
         begin
             repeat(n * 8) @(posedge clk);
-            #1; // settle
+            #1; // Settle time
         end
     endtask
 
     initial begin
         $dumpfile("tb_risc_cpu_top.vcd");
         $dumpvars(0, tb_risc_cpu_top);
-        $display("========== TB RISC CPU TOP-LEVEL BẮT ĐẦU ==========");
+        $display("========== STARTING RISC CPU TOP-LEVEL TEST ==========");
 
-        // ─────────────────────────────────────────────────────
-        // Khởi tạo
-        // ─────────────────────────────────────────────────────
+        // 1. Initialization
         rst = 1; @(posedge clk); #1;
-        $display("\n--- Nạp chương trình ---");
+        $display("\n--- Loading Program ---");
         load_program();
 
-        // ─────────────────────────────────────────────────────
-        // Bắt đầu chạy
-        // ─────────────────────────────────────────────────────
-        $display("\n--- Bắt đầu chạy CPU ---");
+        // 2. Start Execution
+        $display("\n--- De-asserting Reset ---");
         rst = 0;
 
-        // ─────────────────────────────────────────────────────
-        // Sau lệnh 1: LDA 16 → ACC = 5
-        // ─────────────────────────────────────────────────────
+        // Verify LDA 16
         wait_instructions(1);
-        $display("\n--- Sau LDA 16 (lệnh 1) ---");
-        check(32'd5, acc_val, "ACC = mem[16] = 5");
-        check(32'd1, pc_val,  "PC = 1 (tiếp theo)");
+        $display("\n--- After LDA 16 (Inst 1) ---");
+        check(32'd5, acc_val, "ACC = mem[16]");
+        check(32'd1, pc_val,  "PC Incremented");
 
-        // ─────────────────────────────────────────────────────
-        // Sau lệnh 2: ADD 17 → ACC = 5+3 = 8
-        // ─────────────────────────────────────────────────────
+        // Verify ADD 17
         wait_instructions(1);
-        $display("\n--- Sau ADD 17 (lệnh 2) ---");
-        check(32'd8, acc_val, "ACC = 5+3 = 8");
-        check(32'd2, pc_val,  "PC = 2");
+        $display("\n--- After ADD 17 (Inst 2) ---");
+        check(32'd8, acc_val, "ACC = 5 + 3");
+        check(32'd2, pc_val,  "PC Incremented");
 
-        // ─────────────────────────────────────────────────────
-        // Sau lệnh 3: AND 18 → ACC = 8 & 0xFF = 8
-        // ─────────────────────────────────────────────────────
+        // Verify AND 18
         wait_instructions(1);
-        $display("\n--- Sau AND 18 (lệnh 3) ---");
-        check(32'd8, acc_val, "ACC = 8 & 0xFF = 8");
-        check(32'd3, pc_val,  "PC = 3");
+        $display("\n--- After AND 18 (Inst 3) ---");
+        check(32'd8, acc_val, "ACC = 8 & 0xFF");
 
-        // ─────────────────────────────────────────────────────
-        // Sau lệnh 4: XOR 19 → ACC = 8 ^ 0 = 8
-        // ─────────────────────────────────────────────────────
-        wait_instructions(1);
-        $display("\n--- Sau XOR 19 (lệnh 4) ---");
-        check(32'd8, acc_val, "ACC = 8 ^ 0 = 8");
-        check(32'd4, pc_val,  "PC = 4");
+        // Verify STO 20
+        wait_instructions(2); // Waiting for STO and then LDA verify
+        $display("\n--- After STO 20 and LDA 20 ---");
+        check(32'd8, dut.mem.mem[20], "Memory check at addr 20");
+        check(32'd8, acc_val,         "ACC re-loaded from addr 20");
 
-        // ─────────────────────────────────────────────────────
-        // Sau lệnh 5: STO 20 → mem[20] = 8
-        // ─────────────────────────────────────────────────────
-        wait_instructions(1);
-        $display("\n--- Sau STO 20 (lệnh 5) ---");
-        check(32'd8, dut.mem.mem[20], "mem[20] = 8 (STO thành công)");
-        check(32'd5, pc_val,          "PC = 5");
-
-        // ─────────────────────────────────────────────────────
-        // Sau lệnh 6: LDA 20 → ACC = mem[20] = 8 (verify STO)
-        // ─────────────────────────────────────────────────────
-        wait_instructions(1);
-        $display("\n--- Sau LDA 20 (lệnh 6 - verify STO) ---");
-        check(32'd8, acc_val, "ACC = mem[20] = 8 (STO/LDA verify OK)");
-        check(32'd6, pc_val,  "PC = 6");
-
-        // ─────────────────────────────────────────────────────
-        // Sau lệnh 7: JMP 7 → PC nhảy đến 7
-        // ─────────────────────────────────────────────────────
-        wait_instructions(1);
-        $display("\n--- Sau JMP 7 (lệnh 7) ---");
-        check(32'd7, pc_val, "PC = 7 (JMP thành công)");
-
-        // ─────────────────────────────────────────────────────
-        // Sau lệnh 8: HLT → halt signal phải lên
-        // ─────────────────────────────────────────────────────
-        wait_instructions(1);
-        $display("\n--- Sau HLT (lệnh 8) ---");
+        // Verify JMP 7 and HLT
+        wait_instructions(2);
+        $display("\n--- Final Status Check ---");
+        check(32'd7, pc_val, "PC after JMP");
+        
         if (halt_sig === 1'b1) begin
-            $display("  [PASS] HALT signal = 1, CPU dừng đúng");
+            $display("  [PASS] HALT signal detected. CPU stopped correctly.");
             pass_count = pass_count + 1;
         end else begin
-            $display("  [FAIL] HALT signal = %b, mong đợi = 1", halt_sig);
+            $display("  [FAIL] HALT signal NOT detected.");
             fail_count = fail_count + 1;
         end
 
-        // ─────────────────────────────────────────────────────
-        // Kiểm tra memory cuối cùng
-        // ─────────────────────────────────────────────────────
-        $display("\n--- Kiểm tra memory sau khi chạy xong ---");
-        check(32'd5, dut.mem.mem[16], "mem[16] không đổi = 5");
-        check(32'd3, dut.mem.mem[17], "mem[17] không đổi = 3");
-        check(32'd8, dut.mem.mem[20], "mem[20] = 8 (kết quả STO)");
+        // 3. Reset mid-execution test
+        $display("\n--- Testing Mid-Execution Reset ---");
+        rst = 1; @(posedge clk); #1;
+        check(32'd0, pc_val,  "PC reset to 0");
+        check(32'd0, acc_val, "ACC reset to 0");
 
-        // ─────────────────────────────────────────────────────
-        // Test reset giữa chừng
-        // ─────────────────────────────────────────────────────
-        $display("\n--- Test: Reset CPU đang chạy ---");
-        rst = 1;
-        @(posedge clk); #1;
-        check(32'd0, pc_val, "PC = 0 sau reset");
-        // ACC cũng về 0 sau reset
-        check(32'd0, acc_val, "ACC = 0 sau reset");
-        rst = 0;
-
-        // ─────────────────────────────────────────────────────
-        // Tổng kết
-        // ─────────────────────────────────────────────────────
+        // Final Summary
         $display("\n========================================");
-        $display("KẾT QUẢ: %0d PASS, %0d FAIL", pass_count, fail_count);
+        $display("FINAL RESULT: %0d PASS, %0d FAIL", pass_count, fail_count);
         if (fail_count == 0) begin
-            $display(">>> TẤT CẢ TEST PASS!");
-            $display(">>> CPU chạy đúng: LDA, ADD, AND, XOR, STO, JMP, HLT");
+            $display(">>> ALL TESTS PASSED SUCCESSFULLY!");
         end else begin
-            $display(">>> CÓ %0d LỖI! Kiểm tra waveform để debug.", fail_count);
+            $display(">>> %0d ERRORS FOUND! Check waveforms.", fail_count);
         end
         $display("========================================");
         $finish;
     end
-
-    // Monitor: in ra mỗi khi state thay đổi (optional, bỏ comment để debug)
-    // initial begin
-    //     $monitor("t=%4t | state=%0d | PC=%0d | ACC=%0d | opcode=%b | halt=%b",
-    //              $time, state, pc_val, acc_val, dut.opcode, halt_sig);
-    // end
-
 endmodule

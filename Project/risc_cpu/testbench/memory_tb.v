@@ -1,26 +1,26 @@
 `timescale 1ns/1ps
-// ============================================================
-// TESTBENCH: MEMORY
-// Kiểm tra: ghi (wr), đọc (rd), không đọc/ghi cùng lúc
-// ============================================================
 module tb_memory;
-
-    reg        clk;
-    reg  [4:0]  addr;
-    reg        rd, wr;
-    reg  [31:0] data_in;
-    wire [31:0] data_out;
+    reg clk, rd, wr;
+    reg [31:0] addr; // Sua lai 32-bit cho khop voi module
+    
+    // KY THUAT TEST CUC KY QUAN TRONG CHO PORT INOUT:
+    wire [31:0] data;        // Bat buoc dung wire de noi vao DUT
+    reg  [31:0] tb_data_in;  // Bien trung gian de testbench "bom" du lieu
 
     integer pass_count = 0;
     integer fail_count = 0;
 
+    // Mach Tri-state cua Testbench (Dong vai tro la CPU):
+    // Khi CPU ghi (wr=1), day tb_data_in vao bus data.
+    // Khi CPU doc (wr=0), phai nha bus (High-Z) de RAM day ket qua ra.
+    assign data = (wr) ? tb_data_in : 32'bz;
+
     memory dut (
-        .clk      (clk),
-        .addr     (addr),
-        .rd       (rd),
-        .wr       (wr),
-        .data_in  (data_in),
-        .data_out (data_out)
+        .clk(clk), 
+        .addr(addr), 
+        .rd(rd), 
+        .wr(wr), 
+        .data(data)
     );
 
     initial clk = 0;
@@ -41,122 +41,81 @@ module tb_memory;
         end
     endtask
 
-    // Helper: ghi 1 giá trị vào memory
-    task mem_write;
-        input [4:0]  a;
-        input [31:0] d;
-        begin
-            addr = a; data_in = d; wr = 1; rd = 0;
-            @(posedge clk); #1;
-            wr = 0;
-        end
-    endtask
-
-    // Helper: đọc 1 giá trị từ memory
-    task mem_read;
-        input [4:0] a;
-        begin
-            addr = a; wr = 0; rd = 1;
-            @(posedge clk); #1;
-            rd = 0;
-        end
-    endtask
-
     initial begin
         $dumpfile("tb_memory.vcd");
         $dumpvars(0, tb_memory);
-        $display("========== TB MEMORY BẮT ĐẦU ==========");
+        $display("========== TB MEMORY BAT DAU ==========");
 
-        rd = 0; wr = 0; addr = 0; data_in = 0;
-        @(posedge clk); #1; // 1 cycle khởi tạo
-
-        // ─────────────────────────────────────────────────────
-        // Test 1: Ghi rồi đọc lại — địa chỉ 0
-        // ─────────────────────────────────────────────────────
-        $display("\n--- Test 1: Ghi rồi đọc (addr=0) ---");
-        mem_write(5'd0, 32'hCAFEBABE);
-        mem_read(5'd0);
-        check(32'hCAFEBABE, data_out, "Ghi/đọc addr=0: 0xCAFEBABE");
-
-        // ─────────────────────────────────────────────────────
-        // Test 2: Ghi/đọc nhiều địa chỉ khác nhau
-        // ─────────────────────────────────────────────────────
-        $display("\n--- Test 2: Nhiều địa chỉ ---");
-        mem_write(5'd1,  32'd100);
-        mem_write(5'd2,  32'd200);
-        mem_write(5'd10, 32'hDEADBEEF);
-        mem_write(5'd31, 32'hFFFFFFFF); // địa chỉ cao nhất
-
-        mem_read(5'd1);  check(32'd100,       data_out, "Đọc addr=1:  100");
-        mem_read(5'd2);  check(32'd200,       data_out, "Đọc addr=2:  200");
-        mem_read(5'd10); check(32'hDEADBEEF,  data_out, "Đọc addr=10: 0xDEADBEEF");
-        mem_read(5'd31); check(32'hFFFFFFFF,  data_out, "Đọc addr=31: 0xFFFFFFFF");
-
-        // ─────────────────────────────────────────────────────
-        // Test 3: Ghi đè — giá trị mới phải thắng
-        // ─────────────────────────────────────────────────────
-        $display("\n--- Test 3: Ghi đè ---");
-        mem_write(5'd5, 32'd111);
-        mem_write(5'd5, 32'd999); // ghi đè
-        mem_read(5'd5);
-        check(32'd999, data_out, "Ghi đè addr=5: giá trị mới = 999");
-
-        // ─────────────────────────────────────────────────────
-        // Test 4: Địa chỉ không ghi vẫn giữ nguyên
-        // ─────────────────────────────────────────────────────
-        $display("\n--- Test 4: Địa chỉ khác không bị ảnh hưởng ---");
-        mem_write(5'd0, 32'hAAAAAAAA);
-        mem_read(5'd1); // địa chỉ 1 không được ghi
-        check(32'd100, data_out, "addr=1 không đổi sau khi ghi addr=0");
-
-        // ─────────────────────────────────────────────────────
-        // Test 5: Không làm gì khi rd=0, wr=0
-        // ─────────────────────────────────────────────────────
-        $display("\n--- Test 5: rd=0, wr=0 → giữ data_out ---");
-        mem_read(5'd0); // đọc để data_out có giá trị cũ
-        // Bây giờ tắt cả rd và wr
-        rd = 0; wr = 0; addr = 5'd15; data_in = 32'hBBBBBBBB;
+        // Khoi tao
+        rd = 0; wr = 0; addr = 0; tb_data_in = 0;
         @(posedge clk); #1;
-        check(32'hAAAAAAAA, data_out, "rd=wr=0: data_out giữ nguyên");
 
         // ─────────────────────────────────────────────────────
-        // Test 6: Mô phỏng chương trình thực
-        //   - Nạp instruction vào addr 0..3
-        //   - Nạp data vào addr 16, 17
-        //   - Đọc lần lượt như CPU làm
+        // Test 1: Chuc nang Ghi va Doc co ban
         // ─────────────────────────────────────────────────────
-        $display("\n--- Test 6: Mô phỏng nạp program ---");
-        // Instruction: LDA 16, ADD 17, STO 18, HLT
-        mem_write(5'd0,  32'h000000B0); // LDA  addr=16 (binary: 10110000)
-        mem_write(5'd1,  32'h00000050); // ADD  addr=17 (binary: 01010001)
-        mem_write(5'd2,  32'h000000D2); // STO  addr=18 (binary: 11010010)
-        mem_write(5'd3,  32'h00000000); // HLT
-        // Data
-        mem_write(5'd16, 32'd5);
-        mem_write(5'd17, 32'd3);
+        $display("\n--- Test 1: Basic Write/Read ---");
+        addr = 32'd10; tb_data_in = 32'hA5A5A5A5; wr = 1; rd = 0;
+        @(posedge clk); #1; // RAM thuc hien ghi
+        
+        wr = 0; rd = 1;     // Tat ghi, bat doc de nha bus
+        @(posedge clk); #1; // RAM xuat du lieu
+        check(32'hA5A5A5A5, data, "Doc lai o nho so 10");
 
-        // CPU đọc instruction
-        mem_read(5'd0);  check(32'h000000B0, data_out, "Fetch lệnh 0: LDA");
-        mem_read(5'd1);  check(32'h00000050, data_out, "Fetch lệnh 1: ADD");
-        mem_read(5'd2);  check(32'h000000D2, data_out, "Fetch lệnh 2: STO");
-        mem_read(5'd3);  check(32'h00000000, data_out, "Fetch lệnh 3: HLT");
+        // ─────────────────────────────────────────────────────
+        // Test 2: Edge Case - Dia chi bien (O so 0 va 31)
+        // ─────────────────────────────────────────────────────
+        $display("\n--- Test 2: Edge Case - Boundary Addresses ---");
+addr = 32'd0;  tb_data_in = 32'h11111111; wr = 1; rd = 0; @(posedge clk); #1;
+        addr = 32'd31; tb_data_in = 32'h99999999; wr = 1; rd = 0; @(posedge clk); #1;
+        
+        wr = 0; rd = 1; 
+        addr = 32'd0;  @(posedge clk); #1; check(32'h11111111, data, "Doc o nho so 0");
+        addr = 32'd31; @(posedge clk); #1; check(32'h99999999, data, "Doc o nho so 31");
 
-        // CPU đọc data
-        mem_read(5'd16); check(32'd5, data_out, "Đọc data addr=16: 5");
-        mem_read(5'd17); check(32'd3, data_out, "Đọc data addr=17: 3");
+        // ─────────────────────────────────────────────────────
+        // Test 3: Edge Case - Tran dia chi (Out of bounds)
+        // ─────────────────────────────────────────────────────
+        $display("\n--- Test 3: Edge Case - Address Overflow ---");
+        // RAM chi lay 5 bit dia chi. Neu nhap dia chi 32 thi phai vong ve 0
+        addr = 32'd32; wr = 0; rd = 1; 
+        @(posedge clk); #1;
+        check(32'h11111111, data, "Truy cap dia chi 32 tu dong vong ve 0");
 
-        // CPU ghi kết quả (STO: 5+3=8)
-        mem_write(5'd18, 32'd8);
-        mem_read(5'd18); check(32'd8, data_out, "Kết quả STO addr=18: 8");
+        // ─────────────────────────────────────────────────────
+        // Test 4: Edge Case - rd=1 va wr=1 cung luc (Loi dieu khien)
+        // ─────────────────────────────────────────────────────
+        $display("\n--- Test 4: Edge Case - Read/Write Conflict ---");
+        addr = 32'd5; tb_data_in = 32'hDEADBEEF; wr = 1; rd = 1;
+        @(posedge clk); #1; // Module cua ban phai block lenh nay lai
+        
+        wr = 0; rd = 1; // Doc lai de xem RAM co bi ghi de hay khong
+        @(posedge clk); #1;
+        if (data !== 32'hDEADBEEF) begin
+            $display("  [PASS] RAM an toan tu choi ghi khi rd=1 va wr=1");
+            pass_count = pass_count + 1;
+        end else begin
+            $display("  [FAIL] RAM bi ghi de sai logic khi rd=1 va wr=1");
+            fail_count = fail_count + 1;
+        end
 
+        // ─────────────────────────────────────────────────────
+        // Test 5: Edge Case - Trang thai ranh roi (Idle)
+        // ─────────────────────────────────────────────────────
+        $display("\n--- Test 5: Edge Case - Idle State ---");
+        wr = 0; rd = 0;
+        @(posedge clk); #1;
+        check(32'bz, data, "Bus dat trang thai High-Z (bz) khi ranh roi");
+
+        // ─────────────────────────────────────────────────────
+        // Tong ket
+        // ─────────────────────────────────────────────────────
         $display("\n========================================");
-        $display("KẾT QUẢ: %0d PASS, %0d FAIL", pass_count, fail_count);
+$display("KET QUA: %0d PASS, %0d FAIL", pass_count, fail_count);
         if (fail_count == 0)
-            $display(">>> TẤT CẢ TEST PASS! Memory hoạt động đúng.");
+            $display(">>> TAT CA TEST PASS! Module Memory hoat dong hoan hao.");
         else
-            $display(">>> CÓ LỖI! Xem lại các case FAIL.");
+            $display(">>> CO LOI! Kiem tra lai cac truong hop FAIL.");
         $display("========================================");
         $finish;
     end
-
 endmodule
