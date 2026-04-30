@@ -7,8 +7,10 @@ module risc_cpu_top (
     
     // Quản lý Bidirectional Bus cho Memory
     wire [31:0] mem_bus;
+	wire [31:0] alu_inA;
     assign mem_bus = data_e ? acc_out : 32'bz;
     assign opcode = ir_out[7:5]; // 3-bit top of instructions
+	assign alu_inA = (opcode == 3'b111)? {27'b0, ir_out[4:0]} : acc_out;
 
     program_counter pc (.clk(clk), .rst(rst), .inc(inc_pc), .load(ld_pc), 
                         .data_in(alu_out), .pc_out(pc_out));
@@ -22,7 +24,7 @@ module risc_cpu_top (
 
     register acc (.clk(clk), .rst(rst), .load(ld_ac), .data_in(alu_out), .data_out(acc_out));
 
-    alu alu0 (.opcode(opcode), .inA(acc_out), .inB(mem_bus), .out(alu_out), .is_zero(is_zero));
+    alu alu0 (.opcode(opcode), .inA(alu_inA), .inB(mem_bus), .out(alu_out), .is_zero(is_zero));
 
     controller ctrl (.clk(clk), .rst(rst), .opcode(opcode), .is_zero(is_zero),
                      .sel(sel), .rd(rd), .ld_ir(ld_ir), .halt(halt), .inc_pc(inc_pc), 
