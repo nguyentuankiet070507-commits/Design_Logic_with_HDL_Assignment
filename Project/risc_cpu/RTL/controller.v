@@ -27,6 +27,7 @@ module controller (
 
     always @(posedge clk) begin
         if (rst) state <= INST_ADDR;
+        else if (halt) state <= OP_ADDR;
         else     state <= state + 1;  // sequential 0→7→0
     end
 
