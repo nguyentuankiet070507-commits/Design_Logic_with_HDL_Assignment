@@ -408,3 +408,13 @@ Project/
 ---
 
 *Hướng dẫn được soạn cho HCMUT – Digital Design Project | RISC CPU 32-bit on Arty Z7-20*
+
+
+### Demo ✨✨✨
+Watch the FPGA demo here:
+
+UI/UX:
+[![FPGA Demo](https://img.youtube.com/vi/-PD0mppv8So/1.jpg)](https://youtube.com/shorts/-PD0mppv8So)
+
+Pipeline 2 stage:
+[![FPGA Demo](https://img.youtube.com/vi/-D_QTIO0Ers/1.jpg)](https://youtube.com/shorts/-D_QTIO0Ers)
